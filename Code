@@ -14,6 +14,7 @@ print(train_data.shape)
 print(test_data.shape)
 
 % Verifico che non ci siano alcuni dati mancanti nel dataset e nel caso li elimino 
+from statsmodels.tsa.stattools import adfuller
 for column in train_data.columns:
     series = train_data[column].dropna()
     
