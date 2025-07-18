@@ -1,0 +1,58 @@
+% Importo il dataset da Excel, contente i log-ritorni di una serie di ETF
+import pandas as pd
+df = pd.read_excel(r"C:\Users\gabri\OneDrive\Desktop\Tesi\dataset_tesi_finale.xlsx", sheet_name= 'Dataset_log_ritorni',  engine='openpyxl')
+df['Date'] = pd.to_datetime(df['Date'])
+df.set_index('Date', inplace=True)
+print(df.head())
+
+% Divido il dataset in train e test per effettuare le varie analisi (80% - 20%)
+n = len(df)
+split_index = int(0.8* n)
+train_data = df.iloc[:split_index]
+test_data = df.iloc[split_index:]
+print(train_data.shape)
+print(test_data.shape)
+
+% Verifico che non ci siano alcuni dati mancanti nel dataset e nel caso li elimino 
+for column in train_data.columns:
+    series = train_data[column].dropna()
+    
+    if len(series) > 20:  # verifica che la serie abbia abbastanza dati
+        result = adfuller(series)
+        print(f"🟢 Serie: {column}")
+        print(f"ADF Statistic: {result[0]:.4f}")
+        print(f"p-value: {result[1]:.4f}")
+        if result[1] < 0.05:
+            print("✅ Serie stazionaria (rifiuto H0)")
+        else:
+            print("❌ Serie non stazionaria (non rifiuto H0)")
+        print("-" * 40)
+
+% Importo la libreria del modello VAR e svolgo il modello sui miei dati di train e visualizzo i risultati
+import warnings
+from statsmodels.tools.sm_exceptions import ValueWarning
+warnings.simplefilter("ignore", ValueWarning)
+from statsmodels.tsa.api import VAR
+train_data.index.freq = pd.infer_freq(train_data.index) # Ricordiamo che stiamo lavorando con prezzi giornalieri
+model_var = VAR(train_data) # Creazione del modello VAR
+results = model_var.fit(ic='aic') # Stima automaticamente il Var con il lag che minimizza l'AIC
+print(results.summary())
+
+% Creo un loop per capire tramite il test di Causalità di Granger quali serie sono causali rispetto alle altre
+variables = train_data.columns.tolist()
+granger_results = []
+for y in variables:
+    for x in variables:
+        if x !=y:
+            test_result = results.test_causality(y, [x], kind= 'f')
+            p_value = test_result.pvalue
+            granger_results.append({'Cause':x, 'Effect':y, 'p-value':p_value})
+            # esegui test: X -> Y
+granger_df = pd.DataFrame(granger_results)
+granger_df = granger_df.sort_values(by= 'p-value')
+print(granger_df)
+
+% Estraggo solo le variabili con un p-value significativo (0.05<)
+
+significant_results = granger_df[granger_df['p-value'] < 0.06]
+print(significant_results)
